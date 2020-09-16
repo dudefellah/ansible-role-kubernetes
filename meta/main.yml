@@ -1,5 +1,5 @@
 galaxy_info:
-  name: kubernetes
+  role_name: kubernetes
   author: Dan Thomson
   description: Kubernetes Cluster Installer
 
