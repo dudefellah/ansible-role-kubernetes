@@ -1,0 +1,52 @@
+---
+- name: Fail if no control plane endpoint is specified but there are multiple masters
+  fail:
+    msg: |
+      You must specify a control-plane-endpoint value if you are to use multiple
+      master nodes.
+  when:
+    - "_kubernetes_control_plane_replicas|length > 0"
+    - >
+      (kubernetes_control_plane_endpoint is none) or
+      (kubernetes_control_plane_endpoint|length == 0)
+
+- block:
+    - name: Create a temp location for the kubeadmin config
+      tempfile:
+        state: file
+      register: tmpfile
+
+    - name: Write the best-fit kubeadm template file
+      template:
+        src: "{{ template_filename | basename }}"
+        dest: "{{ tmpfile.path }}"
+        owner: root
+        group: root
+        mode: "0640"
+      vars:
+        kubeadm_files:
+          - "{{ role_path }}/templates/kubeadm.{{ _kubernetes_version }}.config.j2"
+          - >-
+            {{ role_path }}/templates/kubeadm.{{ (_kubernetes_version.split('.'))[0:2] | join('.') }}.config.j2
+          - "{{ role_path }}/templates/kubeadm.config.j2"
+      loop: "{{ q('first_found', kubeadm_files) }}"
+      loop_control:
+        loop_var: template_filename
+
+    - name: Run kubeadm init if this isn't already a master node but it should be
+      command: "kubeadm init --config='{{ tmpfile.path }}'"
+      register: kubeadm_output
+      when:
+        - "kubernetes_master"
+        - "not _kubernetes_master_installed"
+  always:
+    - name: Cleanup the tmpfile
+      file:
+        path: "{{ tmpfile.path }}"
+        state: absent
+      when:
+        - "kubernetes_kubeadm_config is not none"
+        - "kubernetes_kubeadm_config|length > 0"
+  when:
+    - "kubernetes_master"
+    - "not _kubernetes_master_installed"

@@ -1,0 +1,29 @@
+---
+- name: Read the src master file
+  slurp:
+    src: "{{ src }}"
+  register: file_read
+  changed_when: false
+  when:
+    - "master"
+
+- name: Create the master destination directory
+  file:
+    path: "{{ dest | dirname }}"
+    state: directory
+    owner: "{{ owner }}"
+    group: "{{ group }}"
+    mode: "{{ dir_mode | default('0755') }}"
+  when:
+    - "recipient"
+
+- name: Deposit the master replica file
+  copy:
+    content: "{{ hostvars[master_node]['file_read'].content | b64decode }}"
+    dest: "{{ dest }}"
+    owner: "{{ owner }}"
+    group: "{{ group }}"
+    mode: "{{ mode | default('0600') }}"
+  no_log: "{{ kubernetes_no_log }}"
+  when:
+    - "recipient"

@@ -1,0 +1,158 @@
+---
+# tasks file for ansible-role-kubernetes
+- name: Load platform variables
+  include_vars: "{{ filename }}"
+  vars:
+    vars_files:
+      files:
+        - "{{ role_path }}/vars/{{ ansible_distribution | lower }}/\
+          {{ ansible_distribution_major_version }}.yml"
+        - "{{ role_path }}/vars/{{ ansible_distribution | lower }}/\
+          main.yml"
+        - "{{ role_path }}/vars/{{ ansible_os_family | lower }}/\
+          main.yml"
+        - "{{ role_path }}/vars/main.yml"
+  loop: "{{ q('first_found', vars_files, errors='ignore') }}"
+  loop_control:
+    loop_var: filename
+
+- name: Load platform dependencies
+  vars:
+    tasks:
+      files:
+        - "{{ role_path }}/tasks/dependencies/\
+          {{ ansible_distribution | lower }}/\
+          {{ ansible_distribution_major_version }}.yml"
+        - "{{ role_path }}/tasks/dependencies/\
+          {{ ansible_distribution | lower }}/\
+          main.yml"
+        - "{{ role_path }}/tasks/dependencies/\
+          {{ ansible_os_family | lower }}.yml"
+        - "{{ role_path }}/tasks/dependencies/main.yml"
+  include_tasks: "{{ filename }}"
+  loop: "{{ q('first_found', tasks, errors='ignore') }}"
+  loop_control:
+    loop_var: filename
+
+- name: Start and enable kubelet
+  service:
+    name: kubelet
+    state: started
+    enabled: true
+
+- include_tasks: kubernetes-cluster-facts.yml
+
+- name: Fail if things look fishy
+  fail:
+    msg: >
+      You shouldn't replicate your control plane over an even number of hosts,
+      but you've selected {{ _kubernetes_control_plane_replicas|length + 1 }}
+      master-replica nodes (that is, master + control plane replicas). Please
+      set an even number of control plane replica nodes, or you an use the
+      "kubernetes_force" option if you really want continue anyway.
+  when:
+    - "not kubernetes_force"
+    - "(_kubernetes_control_plane_replicas|length) % 2 != 0"
+
+- name: Do master node install process
+  include_tasks: install-master.yml
+  tags:
+    - kubernetes_master
+
+- name: Manage taints on the master node
+  include_tasks: manage-taints.yml
+  vars:
+    kubernetes_manage_taints: "{{ kubernetes_master }}"
+  tags:
+    - master
+    - taint
+  when:
+    - kubernetes_master
+
+- name: Install the Kubernetes CNI plugin
+  include_tasks: prepare-cni.yml
+  tags:
+    - kubernetes_network
+
+- name: Do control plane replica install process
+  include_tasks: install-join-node.yml
+  vars:
+    _kubernetes_join_label_selectors:
+      - "node-role.kubernetes.io/master"
+    _kubernetes_join_node: "{{ kubernetes_control_plane_replica }}"
+    _kubernetes_sync_files:
+      - src: "{{ kubernetes_ca_certificate_path }}"
+        dest: "{{ kubernetes_ca_certificate_path }}"
+        mode: "0644"
+        owner: root
+        group: root
+      - src: "{{ kubernetes_ca_privatekey_path }}"
+        dest: "{{ kubernetes_ca_privatekey_path }}"
+        mode: "0644"
+        owner: root
+        group: root
+      - src: /etc/kubernetes/pki/sa.pub
+        dest: /etc/kubernetes/pki/sa.pub
+        mode: "0644"
+        owner: root
+        group: root
+      - src: /etc/kubernetes/pki/sa.key
+        dest: /etc/kubernetes/pki/sa.key
+        mode: "0600"
+        owner: root
+        group: root
+      - src: /etc/kubernetes/pki/front-proxy-ca.crt
+        dest: /etc/kubernetes/pki/front-proxy-ca.crt
+        mode: "0644"
+        owner: root
+        group: root
+      - src: /etc/kubernetes/pki/front-proxy-ca.key
+        dest: /etc/kubernetes/pki/front-proxy-ca.key
+        mode: "0600"
+        owner: root
+        group: root
+      - src: /etc/kubernetes/pki/etcd/ca.crt
+        dest: /etc/kubernetes/pki/etcd/ca.crt
+        mode: "0644"
+        owner: root
+        group: root
+      - src: /etc/kubernetes/pki/etcd/ca.key
+        dest: /etc/kubernetes/pki/etcd/ca.key
+        mode: "0600"
+        owner: root
+        group: root
+    _kubernetes_kubeadm_join_args:
+      - --control-plane
+    _kubernetes_api_client: "{{ _kubernetes_master_node }}"
+  tags:
+    - kubernetes_control_plane_replica
+
+- name: Manage taints on the control plane
+  include_tasks: manage-taints.yml
+  vars:
+    kubernetes_manage_taints: "{{ kubernetes_control_plane_replica }}"
+  tags:
+    - master
+    - taint
+  when:
+    - "kubernetes_control_plane_replica"
+
+- name: Do regular node join process
+  include_tasks: install-join-node.yml
+  vars:
+    _kubernetes_join_label_selectors: []
+    _kubernetes_join_node: "{{ ((not kubernetes_master) and (not kubernetes_control_plane_replica)) }}"
+    _kubernetes_api_client: "{{ _kubernetes_master_node }}"
+  tags:
+    - kubernetes_node
+
+- name: Manage taints on everybody else (who knows, maybe this is useful?)
+  include_tasks: manage-taints.yml
+  vars:
+    kubernetes_manage_taints: "{{ (not kubernetes_master) and (not kubernetes_control_plane_replica) }}"
+  tags:
+    - master
+    - taint
+  when:
+    - "not kubernetes_master"
+    - "not kubernetes_control_plane_replica"

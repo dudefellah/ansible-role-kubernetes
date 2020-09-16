@@ -1,0 +1,64 @@
+---
+- name: Set package list facts to make life easier
+  set_fact:
+    _distro_version_packages: "{{ lookup('vars', 'kubernetes_packages_'+ansible_distribution|lower+ansible_distribution_major_version|string, default=[]) }}"
+    _distro_packages: "{{ lookup('vars', 'kubernetes_packages_'+ansible_distribution|lower, default=[]) }}"
+    _os_family_packages: "{{ lookup('vars', 'kubernetes_packages_'+ansible_os_family, default=[]) }}"
+
+- name: Do some logic on finding the packages to be installed
+  set_fact:
+    _installable_packages: >-
+      {{
+        kubernetes_packages is not none |
+        ternary(
+          kubernetes_packages,
+          (
+            _distro_version_packages|ternary(
+              _distro_version_packages,
+              (
+                _distro_packages|ternary(
+                  _distro_packages,
+                  _os_family_packages
+                )
+              )
+            )
+          )
+        )
+      }}
+
+- name: Install Kubernetes Repo
+  yum_repository:
+    name: kubernetes
+    description: Kubernetes package repo
+    baseurl: "https://packages.cloud.google.com/yum/repos/kubernetes-el7-$basearch"
+    enabled: true
+    gpgcheck: true
+    repo_gpgcheck: true
+    gpgkey:
+      - "https://packages.cloud.google.com/yum/doc/yum-key.gpg"
+      - "https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg"
+    exclude:
+      - kubelet
+      - kubeadm
+      - kubectl
+  when:
+    - "_installable_packages|length > 0"
+
+- name: Update our package cache
+  package:
+    update_cache: true
+
+- name: Install packages for Kubernetes binaries
+  package:
+    name: "{{ _installable_packages }}"
+    state: installed
+    disable_excludes: kubernetes
+
+- name: Install python pip modules
+  pip:
+    name: "{{ kubernetes_python_pip_modules }}"
+    state: present
+    virtualenv: "{{ kubernetes_python_virtualenv | default(omit) }}"
+  when:
+    - "kubernetes_python_pip_modules is defined"
+    - "kubernetes_python_pip_modules|length > 0"

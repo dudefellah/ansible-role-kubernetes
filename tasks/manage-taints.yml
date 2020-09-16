@@ -1,0 +1,16 @@
+---
+- name: Set node taints on control plane
+  k8s:
+    api_version: v1
+    kind: Node
+    name: "{{ ansible_nodename }}"
+    kubeconfig: "{{ kubernetes_kubeconfig }}"
+    definition:
+      apiVersion: v1
+      spec:
+        taints: "{{ kubernetes_taints }}"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  when:
+    - "kubernetes_manage_taints"
+    - "kubernetes_taints is not none"

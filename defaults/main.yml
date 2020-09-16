@@ -1,0 +1,196 @@
+---
+# defaults file for ansible-role-kubernetes
+kubernetes_packages: null
+
+# Set this to true when the specified node should be considered a
+# master. Only set this once per cluster. If you would like to add additional
+# control plane replicas, see the `kubernetes_control_plane` value.
+kubernetes_master: false
+
+# A list of taints to be set on the given node.
+# For example, if you want to blank out your master taint, you can set this to
+# an empty list.
+kubernetes_taints: null
+
+# Set this to true when you want to replicate the control plane from the master
+# node. Make sure to also specify a kubernetes_control_plane_endpoint if you
+# have even one of these values set (in addition to the `kubernetes_master`
+# node. Setting this to true on a `kubenetes_master` won't affect anything).
+kubernetes_control_plane_replica: false
+
+# This is the location of the kubeconfig file to be used in order to access
+# the Kubernetes API on the master node.
+kubernetes_kubeconfig: /etc/kubernetes/admin.conf
+
+# This value defines the location of the installed kubectl file. If null, the
+# role will assume it is in the system path appropriate to the distribution
+# package. Typically this means it'll be looking in /usr/bin
+kubernetes_kubectl: null
+
+# Sets the port for the control plane API endpoint.
+# This impacts the API endpoint address which will be added to the kube config
+# during installation and therefore the API address which will be used for
+# examining the cluster during the install process.
+kubernetes_api_port: 6443
+
+# This is the control plane endpoint host. If you have one or more control plane
+# nodes, you should set this to a single address that can be used to reach all
+# control plane nodes, such as an external load balancer.
+#
+# This value affects the creation of the API certificate, so it should be
+# configured from the get-go. If you're not using replica nodes, it should be
+# safe to leave this blank.
+kubernetes_control_plane_endpoint: null
+
+# File contenst are shared between Kubernetes hosts when replicating the control
+# plane. Some sensitive files get copied during this process, so `no_log` is set.
+# If you're debugging, you can set this to true, but be warned that you might
+# leak sensitive information in the process.
+kubernetes_no_log: false
+
+# General Kubernetes networking configuration values.
+# This will be passed to kubeadm during install.
+kubernetes_networking:
+  service_subnet: "10.96.0.0/12"
+  pod_subnet: "172.16.0.0/12"
+  dns_domain: "cluster.local"
+
+# The additional pip requirements for communicating with Kubernetes from
+# Ansible need to be installed on the remote hosts. Setting this value
+# will ensure that the pip module gets added to the
+# `kubernetes_python_virtualenv` Python venv environment and not installed
+# globally.
+kubernetes_python_virtualenv: /var/cache/k8s_venv
+
+# You can set the pip modules which get installed when this role tries to
+# install the pip dependencies in order to communicate with Kubernetes. You
+# can skip the pip module install by setting this value to `null` or `[]`.
+kubernetes_python_pip_modules:
+  - openshift
+
+# When using a virtualenv, you'll want to instruct Ansible to use an
+# appropriate Python interpreter. You can do this here. Values that are
+# accepted by the `ansible_python_interpreter` value are accepted here,
+# so you can use `auto` to use the default system interpreter if you'd
+# like.
+#
+# If this remains set to an alternative Python interpreter, it will only be
+# used when using the k8s* modules and not anywhere else.
+kubernetes_python_interpreter: "{{ kubernetes_python_virtualenv }}/bin/python"
+
+# In some spots, this role might fail if something seems to be misconfigured.
+# The one area where this applies right now is when setting an even number of
+# control plane nodes (which is the master node + control plane replica nodes)
+# since it's not recommended. If you set `kubernetes_force` to true, the role
+# will push on and ignore that error.
+kubernetes_force: false
+
+# Additional arguments to pass to the kubeadm init command during installation.
+kubernetes_kubeadm_init_args: []
+
+# After the initial master creation, we might need to wait for the node to come
+# online. The `kubernetes_master_node_wait_retries` and
+# `kubernetes_master_node_wait_delay` add a retry and delay value for the first
+# connection to the API. You can tweak these values if you need to.
+kubernetes_master_node_wait_retries: 10
+kubernetes_master_node_wait_delay: 5
+
+# The configured cgroup driver for kubelet. This is supplied to kubeadm in
+# a configuration file during install.
+kubernetes_kubelet_cgroup_driver: systemd
+
+# The location of the master CA certificate and key on the master node (and
+# eventually control plane replicas).
+kubernetes_ca_certificate_path: /etc/kubernetes/pki/ca.crt
+kubernetes_ca_privatekey_path: /etc/kubernetes/pki/ca.key
+
+# Set the CNI plugin to be used in Kubernetes. Currently this role is limited
+# to calico and is also limited to using CNI as the network plugin. This might
+# change in future releases.
+kubernetes_cni_plugin_name: calico
+
+# Supply a list of CNI plugin binaries for download and install here.
+kubernetes_cni_plugin_binaries:
+  - url: https://github.com/projectcalico/cni-plugin/releases/download/v3.14.0/calico-amd64
+    dest: /opt/cni/bin/calico
+  - url: https://github.com/projectcalico/cni-plugin/releases/download/v3.14.0/calico-ipam-amd64
+    dest: /opt/cni/bin/calico-ipam
+
+# When installing the CNI plugin, a CNI key and certificate are generated.
+# The next two values specify their locations on the filesystem.
+kubernetes_cni_certificate_path: /etc/kubernetes/pki/cni.crt
+kubernetes_cni_privatekey_path: /etc/kubernetes/pki/cni.key
+
+# The CNI certificates need to be signed against the Kubernetes CA, so this
+# specifies the location of the generated CSR during install.
+kubernetes_cni_csr_path: /etc/kubernetes/pki/cni.csr
+
+# The CNI etc dir root. Used for determining the location of the installed kubeconfig
+# and config files (see below).
+kubernetes_cni_etc_path: /etc/cni
+
+# The Kubernetes CNI plugin RBAC configuration
+kubernetes_cni_rbac:
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: ClusterRole
+  metadata:
+    name: "{{ kubernetes_cni_plugin_name }}-cni"
+  rules:
+    # The CNI plugin needs to get pods, nodes, and namespaces.
+    - apiGroups: [""]
+      resources:
+        - pods
+        - nodes
+        - namespaces
+      verbs:
+        - get
+    # The CNI plugin patches pods/status.
+    - apiGroups: [""]
+      resources:
+        - pods/status
+      verbs:
+        - patch
+   # These permissions are required for Calico CNI to perform IPAM allocations.
+    - apiGroups: ["crd.projectcalico.org"]
+      resources:
+        - blockaffinities
+        - ipamblocks
+        - ipamhandles
+      verbs:
+        - get
+        - list
+        - create
+        - update
+        - delete
+    - apiGroups: ["crd.projectcalico.org"]
+      resources:
+        - ipamconfigs
+        - clusterinformations
+        - ippools
+      verbs:
+        - get
+        - list
+
+# The contents of the CNI config. This will be converted to JSON and then dropped on
+# the disk as
+# `{{ kubernetes_cni_etc_path }}/net.d/10-{{ kubernetes_cni_plugin_name }}.conflist`
+#
+# The default should work with the default calico CNI network installation.
+kubernetes_cni_pod_network:
+  name: k8s-pod-network
+  cniVersion: "0.3.1"
+  plugins:
+    - type: calico
+      log_level: info
+      datastore_type: kubernetes
+      mtu: 1500
+      ipam:
+        type: "calico-ipam"
+      policy:
+        type: "k8s"
+      kubernetes:
+        kubeconfig: "{{ kubernetes_cni_etc_path }}/net.d/{{ kubernetes_cni_plugin_name }}-kubeconfig"
+    - type: portmap
+      snat: true
+      capabilities:
+        portMappings: true

@@ -1,0 +1,36 @@
+---
+- name: Set package list facts to make life easier
+  set_fact:
+    _distro_version_packages: "{{ lookup('vars', 'kubernetes_packages_'+ansible_distribution|lower+ansible_distribution_major_version|string) }}"
+    _distro_packages: "{{ lookup('vars', 'kubernetes_packages_'+ansible_distribution|lower) }}"
+    _os_family_packages: "{{ lookup('vars', 'kubernetes_packages_'+ansible_os_family) }}"
+
+# Is this going too far?
+# Here we:
+# Install the selected Kubernetes packages in kubernetes_packages
+# If kubernetes_package is empty but non-null, we'll use it and assume the
+# end user doesn't want us trying to install anything
+# If it's null, try to get kubernetes_packages_<distro><version>
+# If that's null, try to get kubernetes_packages_<distro>
+# If that's null, try to get kubernetes_packages_<os_family>
+
+- name: Do some logic on finding the packages to be installed
+  set_fact:
+    _installable_packages: >-
+      {{
+        kubernetes_packages is not none |
+        ternary(
+          kubernetes_packages,
+          (
+            _distro_version_packages|ternary(
+              _distro_version_packages,
+              (
+                _distro_packages|ternary(
+                  _distro_packages,
+                  _os_family_packages
+                )
+              )
+            )
+          )
+        )
+      }}

@@ -1,0 +1,111 @@
+---
+- block:
+    - name: Wait for master to be ready
+      k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - node-role.kubernetes.io/master
+          - "kubernetes.io/hostname in ({{ ansible_nodename }})"
+        kubeconfig: "{{ kubernetes_kubeconfig }}"
+      until:
+        - "k8s_nodes.resources[0].status.conditions[-1].status|bool"
+      retries: "{{ kubernetes_master_node_wait_retries }}"
+      delay: "{{ kubernetes_master_node_wait_delay }}"
+      vars:
+        ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+      register: k8s_nodes
+      when:
+        - "kubernetes_master"
+
+    - name: Get all joined nodes
+      k8s_info:
+        api_version: v1
+        kind: Node
+        kubeconfig: "{{ kubernetes_kubeconfig }}"
+        label_selectors: "{{ _kubernetes_join_label_selectors | default([]) }}"
+      register: current_nodes
+      vars:
+        ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+      when:
+        - "ansible_nodename == _kubernetes_api_client"
+
+    - name: Parse the list of active Kubernetes nodes
+      set_fact:
+        _kubernetes_active_nodes: "{{ hostvars[_kubernetes_api_client]['current_nodes'].resources | map(attribute='metadata.name') | list }}"
+
+    - name: Set a flag to indicate if the existing node is missing from the node list
+      set_fact:
+        _kubernetes_needs_joining: "{{ ((ansible_nodename not in _kubernetes_active_nodes) and (_kubernetes_join_node))|bool }}"
+
+    - debug:
+        msg: "Kubernetes nedes joining {{ hostvars['node1.dev.kube.ccn.triumf.ca']['_kubernetes_needs_joining'] }}"
+
+    - debug:
+        msg: "value: {{ hostvars | dict2items | selectattr('value._kubernetes_needs_joining', 'true') | default([]) | list }}"
+
+    - name: Set a flag to indicate that a token needs generating
+      set_fact:
+        _kubernetes_generate_token: "{{ (hostvars | dict2items | selectattr('value._kubernetes_needs_joining', 'true') | default([]) | list)|length > 0 }}"
+      when:
+        - "kubernetes_master"
+
+    - name: Synchronize file(s) from master to selected nodes
+      include_tasks: sync-from-master.yml
+      vars:
+        src: "{{ _sync_file.src }}"
+        dest: "{{ _sync_file.dest }}"
+        mode: "{{ _sync_file.mode }}"
+        dir_mode: "{{ _sync_file.dir_mode | default('0755') }}"
+        owner: "{{ _sync_file.owner | default('root') }}"
+        group: "{{ _sync_file.group | default('root') }}"
+        master: "{{ kubernetes_master }}"
+        master_node: "{{ _kubernetes_master_node }}"
+        recipient: "{{ _kubernetes_join_node }}"
+      loop: "{{ _kubernetes_sync_files | default([]) }}"
+      loop_control:
+        loop_var: "_sync_file"
+
+    - name: Create the token on the master
+      command: >
+        kubeadm token create --description 'Auto generated token with Ansible'
+          --print-join-command --ttl 15m
+      register: kubeadm_token_cmd
+      when:
+        - "kubernetes_master"
+        - "_kubernetes_generate_token"
+
+    - name: Gather join token and command
+      set_fact:
+        _kubernetes_kubeadm_join: "{{ hostvars[_kubernetes_master_node]['kubeadm_token_cmd'].stdout }}"
+      when:
+        - "_kubernetes_needs_joining"
+
+    - name: Get latest token
+      shell: >
+        set -o pipefail && kubeadm token list | tail -1 | awk '{print $1}'
+      register: token_cmd
+      when:
+        - "kubernetes_master"
+        - "_kubernetes_generate_token"
+
+    - name: Extract token
+      set_fact:
+        _kubeadm_token: "{{ token_cmd.stdout }}"
+      when:
+        - "kubernetes_master"
+        - "_kubernetes_generate_token"
+
+    - name: Join the node to the cluster
+      command: >
+        {{ _kubernetes_kubeadm_join }} {{ (_kubernetes_kubeadm_join_args | default([])) | join(" ") }}
+      when:
+        - "_kubernetes_needs_joining"
+  always:
+    - name: Remove the deploy token from the master
+      command: "kubeadm token delete {{ _kubeadm_token }}"
+      changed_when: false
+      when:
+        - "kubernetes_master"
+        - "_kubernetes_kubeadm_token is defined"
+        - "_kubernetes_kubeadm_token not none"

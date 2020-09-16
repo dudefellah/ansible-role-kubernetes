@@ -1,0 +1,11 @@
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+{% if kubernetes_control_plane_endpoint %}
+controlPlaneEndpoint: "{{ kubernetes_control_plane_endpoint }}:{{ kubernetes_api_port }}"
+{% endif %}
+networking: {{ kubernetes_networking | to_yaml }}
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: {{ kubernetes_kubelet_cgroup_driver }}

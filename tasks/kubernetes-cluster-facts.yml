@@ -1,0 +1,40 @@
+---
+- name: Look for indications that this is a master node
+  stat:
+    path: "{{ kubernetes_kubeconfig }}"
+  register: kube_config_st
+  when:
+    - "kubernetes_master"
+
+- name: Discover the installed kubernetes version
+  command: kubeadm version -o short
+  changed_when: false
+  register: kubeadm_version_cmd
+
+- name: Assemble a list of control plane replicas
+  set_fact:
+    _kubernetes_control_plane_replicas: >
+      {{ (_kubernetes_control_plane_replicas | default([])) + [host.key] | sort }}
+  no_log: "{{ kubernetes_no_log }}"
+  loop: "{{ lookup('dict', hostvars) }}"
+  loop_control:
+    loop_var: host
+  when:
+    - "'kubernetes_control_plane_replica' in host.value"
+    - "host.value.kubernetes_control_plane_replica"
+
+- name: Find the host in our group that's declared to be the master
+  set_fact:
+    _kubernetes_master_node: "{{ host.key }}"
+    _kubernetes_master_installed: "{{ host.value.kube_config_st.stat.exists }}"
+  no_log: "{{ kubernetes_no_log }}"
+  loop: "{{ lookup('dict', hostvars) }}"
+  loop_control:
+    loop_var: host
+  when:
+    - "'kubernetes_master' in host.value"
+    - "host.value.kubernetes_master"
+
+- name: Ensure all nodes get the same version installed
+  set_fact:
+    _kubernetes_version: "{{ hostvars[_kubernetes_master_node]['kubeadm_version_cmd'].stdout[1:] }}" # TODO: Make sure all nodes match

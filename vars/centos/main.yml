@@ -1,0 +1,7 @@
+---
+kubernetes_packages_centos:
+  - kubeadm
+  - kubelet
+  - kubectl
+  - iproute-tc
+  - python3-virtualenv

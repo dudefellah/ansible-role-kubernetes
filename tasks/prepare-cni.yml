@@ -1,0 +1,120 @@
+---
+- name: Generate a private key for the Kubernetes CNI plugin
+  openssl_privatekey:
+    path: "{{ kubernetes_cni_privatekey_path }}"
+    size: 4096
+  when:
+    - "kubernetes_master"
+
+- name: Generate a CNI CSR
+  openssl_csr:
+    path: "{{ kubernetes_cni_csr_path }}"
+    privatekey_path: "{{ kubernetes_cni_privatekey_path }}"
+    subject:
+      CN: "{{ kubernetes_cni_plugin_name }}-cni"
+    mode: "0600"
+  when:
+    - "kubernetes_master"
+
+- name: Create a certificate for the Kubernetes CNI plugin
+  openssl_certificate:
+    provider: ownca
+    path: "{{ kubernetes_cni_certificate_path }}"
+    csr_path: "{{ kubernetes_cni_csr_path }}"
+    ownca_path: "{{ kubernetes_ca_certificate_path }}"
+    ownca_privatekey_path: "{{ kubernetes_cni_privatekey_path }}"
+    ownca_not_after: "+365d"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - "kubernetes_master"
+
+- name: Create cni etc dir
+  file:
+    path: "{{ kubernetes_cni_etc_path }}/net.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create cni kubeconfig file
+  template:
+    src: kubeconfig.j2
+    dest: "{{ kubernetes_cni_etc_path }}/net.d/{{ kubernetes_cni_plugin_name }}-kubeconfig"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - "kubernetes_master"
+
+- name: Apply RBAC Config
+  k8s:
+    state: present
+    kubeconfig: "{{ kubernetes_kubeconfig }}"
+    definition: "{{ kubernetes_cni_rbac }}"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  when:
+    - "kubernetes_master"
+
+- name: Bind Cluster Role to cni user
+  k8s:
+    state: present
+    kubeconfig: "{{ kubernetes_kubeconfig }}"
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: "{{ kubernetes_cni_plugin_name }}-cni"
+      roleRef:
+        apiGroup: rbac.authorization.k8s.io
+        kind: ClusterRole
+        name: "{{ kubernetes_cni_plugin_name }}-cni"
+      subjects:
+        - apiGroup: rbac.authorization.k8s.io
+          kind: User
+          name: "{{ kubernetes_cni_plugin_name }}-cni"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  when:
+    - "kubernetes_master"
+
+- name: Create bindir for CNI binaries
+  file:
+    path: "{{ cni_bin.dest | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ kubernetes_cni_plugin_binaries }}"
+  loop_control:
+    loop_var: cni_bin
+
+- name: Look for existing Calico Plugin Binary
+  stat:
+    path: "{{ cni_bin.dest }}"
+  loop: "{{ kubernetes_cni_plugin_binaries }}"
+  loop_control:
+    loop_var: cni_bin
+  register: cni_plugin_st
+
+- name: Download binaries
+  get_url:
+    url: "{{ cni_bin.url }}"
+    dest: "{{ cni_bin.dest }}"
+    owner: "{{ cni_bin.owner | default('root') }}"
+    group: "{{ cni_bin.group | default('root') }}"
+    mode: "{{ cni_bin.mode | default('0755') }}"
+  loop: "{{ kubernetes_cni_plugin_binaries }}"
+  loop_control:
+    loop_var: cni_bin
+    index_var: idx
+  when:
+    - "not cni_plugin_st.results[idx].stat.exists"
+
+- name: Deploy pod network CNI config
+  copy:
+    content: "{{ kubernetes_cni_pod_network | to_json }}"
+    dest: "{{ kubernetes_cni_etc_path }}/net.d/10-{{ kubernetes_cni_plugin_name }}.conflist"
+    mode: "0644"

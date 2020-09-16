@@ -1,0 +1,26 @@
+galaxy_info:
+  name: kubernetes
+  author: Dan Thomson
+  description: Kubernetes Cluster Installer
+
+  issue_tracker_url: https://github.com/dudefellah/ansible-role-kubernetes/issues
+
+  license: GPL-2.0-or-later
+
+  min_ansible_version: 2.8
+
+  platforms:
+    - name: EL
+      versions:
+        - 8
+
+  galaxy_tags:
+    - kubernetes
+    - k8s
+    - cluster
+    - docker
+    - container
+    - orchestration
+    - centos
+
+dependencies: []
