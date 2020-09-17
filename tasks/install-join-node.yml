@@ -38,15 +38,19 @@
       set_fact:
         _kubernetes_needs_joining: "{{ ((ansible_nodename not in _kubernetes_active_nodes) and (_kubernetes_join_node))|bool }}"
 
-    - debug:
-        msg: "Kubernetes nedes joining {{ hostvars['node1.dev.kube.ccn.triumf.ca']['_kubernetes_needs_joining'] }}"
-
-    - debug:
-        msg: "value: {{ hostvars | dict2items | selectattr('value._kubernetes_needs_joining', 'true') | default([]) | list }}"
-
     - name: Set a flag to indicate that a token needs generating
       set_fact:
-        _kubernetes_generate_token: "{{ (hostvars | dict2items | selectattr('value._kubernetes_needs_joining', 'true') | default([]) | list)|length > 0 }}"
+        _kubernetes_generate_token: >-
+          {{
+            (
+              hostvars |
+              dict2items |
+              selectattr('value._kubernetes_needs_joining', 'defined') |
+              selectattr('value._kubernetes_needs_joining') |
+              default([]) |
+              list
+            ) | length > 0
+          }}
       when:
         - "kubernetes_master"
 
