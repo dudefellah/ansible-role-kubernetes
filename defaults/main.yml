@@ -51,9 +51,9 @@ kubernetes_no_log: false
 # General Kubernetes networking configuration values.
 # This will be passed to kubeadm during install.
 kubernetes_networking:
-  service_subnet: "10.96.0.0/12"
-  pod_subnet: "172.16.0.0/12"
-  dns_domain: "cluster.local"
+  serviceSubnet: "10.96.0.0/12"
+  podSubnet: "172.16.0.0/12"
+  dnsDomain: "cluster.local"
 
 # The additional pip requirements for communicating with Kubernetes from
 # Ansible need to be installed on the remote hosts. Setting this value
