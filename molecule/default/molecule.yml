@@ -1,17 +1,55 @@
 ---
 dependency:
   name: galaxy
+  options:
+    role-file: requirements.yml
 driver:
-  name: docker
+  name: vagrant
+  provider:
+    name: libvirt
 lint: |
   set -e
   ansible-lint .
   yamllint .
 platforms:
-  - name: instance
-    image: docker.io/pycontribs/centos:8
-    pre_build_image: true
+  - name: kubernetes-master-centos7
+    box: centos/7
+    memory: 4096
+    cpus: 2
+    groups:
+      - k8s
+  - name: kubernetes-control-plane1-centos7
+    box: centos/7
+    memory: 1024
+    cpus: 2
+    groups:
+      - k8s
+  - name: kubernetes-control-plane2-centos7
+    box: centos/7
+    memory: 1024
+    cpus: 2
+    groups:
+      - k8s
+  - name: kubernetes-node-centos7
+    box: centos/7
+    memory: 1024
+    cpus: 2
+    groups:
+      - k8s
 provisioner:
   name: ansible
+  inventory:
+    group_vars:
+      k8s:
+        kubernetes_control_plane_endpoint: kubernetes-master-centos7
+        docker_install_compose: false
+    host_vars:
+      kubernetes-master-centos7:
+        kubernetes_master: true
+      kubernetes-control-plane1-centos7:
+        kubernetes_control_plane_replica: true
+      kubernetes-control-plane2-centos7:
+        kubernetes_control_plane_replica: true
+      kubernetes-node-centos7: {}
 verifier:
   name: ansible

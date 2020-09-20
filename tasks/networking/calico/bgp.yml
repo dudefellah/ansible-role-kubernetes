@@ -1,0 +1,20 @@
+---
+# TODO:
+#- block:
+#    - name: Create a tmpfile
+#      tempfile:
+#        state: file
+#      register: tmpfile
+#
+#    - name: Get the node YAML
+#      shell: |
+#        calicoctl get node {{ _kubernetes_master_node }} -o yaml --export > {{ tmpfile.path }}
+#      env:
+#        KUBECONFIG: "{{ kubernetes_kubeconfig }}"
+#        DATASTORE_TYPE: kubernetes
+#
+#  always:
+#    - name: Clean up tmpfile
+#      file:
+#        path: "{{ tmpfile.path }}"
+#        state: absent

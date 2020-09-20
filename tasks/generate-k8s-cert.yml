@@ -1,0 +1,115 @@
+---
+- name: Get the CSR in Kubernetes
+  k8s_info:
+    api_version: v1
+    kind: CertificateSigningRequest
+    name: "{{ common_name }}"
+    kubeconfig: "{{ kubeconfig }}"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  register: k8s_csr
+  when:
+    - "kubernetes_master"
+
+- name: Generate a private key
+  openssl_privatekey:
+    path: "{{ key_path }}"
+    size: 2048
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  when:
+    - "kubernetes_master"
+
+- name: Generate a CNI CSR
+  openssl_csr:
+    path: "{{ csr_path }}"
+    privatekey_path: "{{ key_path }}"
+    common_name: "{{ common_name }}"
+    mode: "0600"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  when:
+    - "kubernetes_master"
+
+- name: Slurp up the CSR
+  slurp:
+    src: "{{ csr_path }}"
+  register: csr_slurp
+  when:
+    - "kubernetes_master"
+
+- name: Send a certificate signing request to Kubernetes
+  k8s:
+    api_version: v1
+    state: present
+    kubeconfig: "{{ kubeconfig }}"
+    definition:
+      apiVersion: certificates.k8s.io/v1
+      kind: CertificateSigningRequest
+      metadata:
+        name: "{{ common_name }}"
+      spec:
+        groups:
+          - system:authenticated
+        signerName: kubernetes.io/kube-apiserver-client
+        request: "{{ csr_slurp.content }}"
+        usages:
+          - client auth
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  when:
+    - "kubernetes_master"
+    - >-
+      (k8s_csr.resources|length == 0) or
+      ('certificate' not in k8s_csr.resources[0].status) or
+      (k8s_csr.resources[0].status.certificate|length == 0)
+
+- name: Get the CSR in Kubernetes
+  k8s_info:
+    api_version: v1
+    kind: CertificateSigningRequest
+    name: "{{ common_name }}"
+    kubeconfig: "{{ kubeconfig }}"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  register: k8s_new_csr
+  when:
+    - "kubernetes_master"
+    - >-
+      (k8s_csr.resources|length == 0) or
+      ('certificate' not in k8s_csr.resources[0].status) or
+      (k8s_csr.resources[0].status.certificate|length == 0)
+
+- name: Approve the CSR
+  command: "kubectl certificate approve {{ common_name }}"
+  environment:
+    KUBECONFIG: "{{ kubeconfig }}"
+  register: k8s_csr_approval
+  when:
+    - "kubernetes_master"
+    - >-
+      (k8s_csr.resources|length == 0) or
+      ('certificate' not in k8s_csr.resources[0].status) or
+      (k8s_csr.resources[0].status.certificate|length == 0)
+
+- name: Retrieve the Certificate from Kubernetes
+  k8s_info:
+    api_version: v1
+    kind: CertificateSigningRequest
+    name: "{{ common_name }}"
+    kubeconfig: "{{ kubeconfig }}"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  register: k8s_new_cert
+  when:
+    - "kubernetes_master"
+
+- name: Write the certificate to the filesystem
+  copy:
+    content: "{{ k8s_new_cert.resources[0].status.certificate | b64decode }}"
+    dest: "{{ cert_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - "kubernetes_master"

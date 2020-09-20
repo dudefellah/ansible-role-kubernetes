@@ -1,0 +1,2 @@
+---
+- include_tasks: "{{ kubernetes_cni_plugin_name }}/main.yml"

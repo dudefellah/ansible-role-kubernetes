@@ -1,0 +1,5 @@
+---
+- include_tasks: typha.yml
+- include_tasks: node.yml
+# TODO:
+# - include_tasks: bgp.yml

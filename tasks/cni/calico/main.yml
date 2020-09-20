@@ -1,0 +1,2 @@
+- include_tasks: crd.yml
+- include_tasks: cni.yml

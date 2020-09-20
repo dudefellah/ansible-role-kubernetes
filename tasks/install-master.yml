@@ -45,8 +45,8 @@
         path: "{{ tmpfile.path }}"
         state: absent
       when:
-        - "kubernetes_kubeadm_config is not none"
-        - "kubernetes_kubeadm_config|length > 0"
+        - "tmpfile is defined"
+        - "'path' in tmpfile"
   when:
     - "kubernetes_master"
     - "not _kubernetes_master_installed"

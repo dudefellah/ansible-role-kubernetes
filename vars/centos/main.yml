@@ -4,4 +4,6 @@ kubernetes_packages_centos:
   - kubelet
   - kubectl
   - iproute-tc
+  - ipset
+  - openssl
   - python3-virtualenv

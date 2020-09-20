@@ -1,0 +1,74 @@
+---
+- name: Prepare
+  hosts: k8s
+  tasks:
+    - block:
+        - name: Set swapoff
+          command: swapoff -a
+          changed_when: false
+
+        - name: Install br_netfilter module
+          modprobe:
+            name: br_netfilter
+
+        # Set ip forwarding on in /proc and in the sysctl file and reload if necessary
+        - sysctl:
+            name: net.bridge.bridge-nf-call-iptables
+            value: '1'
+            sysctl_set: true
+            state: present
+            reload: true
+
+        - name: Get Docker installed, at the very least
+          include_role:
+            name: "geerlingguy.docker"
+          vars:
+            docker_service_state: stopped
+            docker_restart_handler_state: stopped
+
+        - meta: flush_handlers
+      become: true
+
+    - block:
+        - name: Create /etc/docker
+          file:
+            path: /etc/docker
+            state: directory
+            mode: "0755"
+            owner: root
+            group: root
+
+        - name: (Hopefully) Temporary hack to instll Docker daemon.json
+          copy:
+            content: |
+              {
+                "exec-opts": ["native.cgroupdriver=systemd"],
+                "log-driver": "json-file",
+                "log-opts": {
+                  "max-size": "100m"
+                },
+                "storage-driver": "overlay2",
+                "storage-opts": [
+                  "overlay2.override_kernel_check=true"
+                ]
+              }
+            dest: /etc/docker/daemon.json
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Create Docker service path
+          file:
+            path: /etc/systemd/system/docker.service.d
+            state: directory
+            owner: root
+            group: root
+            mode: "0755"
+
+        - name: Start Docker
+          service:
+            name: docker
+            state: started
+            enabled: true
+
+      become: true

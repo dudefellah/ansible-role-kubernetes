@@ -1,0 +1,108 @@
+---
+- name: Look for existing Calico CRDs
+  k8s_info:
+    api_version: v1
+    kind: CustomResourceDefinition
+    name: bgpconfigurations.crd.projectcalico.org
+    kubeconfig: "{{ kubernetes_kubeconfig }}"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  register: calico_crd
+  when:
+    - "kubernetes_master"
+
+- block:
+    - name: Create a tmpdir
+      tempfile:
+        state: directory
+      register: tmpdir
+
+    - name: Download the calico CRDs
+      get_url:
+        url: "{{ kubernetes_cni_crd_url }}"
+        dest: "{{ tmpdir.path }}/{{ kubernetes_cni_crd_url | basename }}"
+
+    - name: Apply CRDs
+      k8s:
+        api_version: v1
+        state: present
+        src: "{{ tmpdir.path }}/{{ kubernetes_cni_crd_url | basename }}"
+        kubeconfig: "{{ kubernetes_kubeconfig }}"
+      vars:
+        ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+
+  always:
+    - name: Cleanup tmpdir
+      file:
+        path: "{{ tmpdir.path }}"
+        state: absent
+  when:
+    - "kubernetes_master"
+    - "calico_crd.resources|length == 0"
+
+- name: Download any additional CNI Plugin Resources
+  get_url:
+    url: "{{ resource.url }}"
+    dest: "{{ resource.dest }}"
+    owner: "{{ resource.owner | default('root') }}"
+    group: "{{ resource.group  | default('root') }}"
+    mode: "{{ resource.mode | default('0640') }}"
+  loop: "{{ kubernetes_network_plugin_resource_urls }}"
+  loop_control:
+    loop_var: resource
+
+- name: Grab a list of current ippools
+  shell: >
+    set -euxo pipefail && {{ kubernetes_network_plugin_calico_calicoctl_path }} get ippools -o wide | awk '{print $2}' | tail -n +2
+  register: ippools_cmd
+  changed_when: false
+  environment:
+    KUBECONFIG: "{{ kubernetes_kubeconfig }}"
+    DATASTORE_TYPE: kubernetes
+  when:
+    - "kubernetes_master"
+
+- name: Get a list of IPs
+  set_fact:
+    ippools_list: "{{ ippools_cmd.stdout.split('\n') }}"
+  when:
+    - "kubernetes_master"
+
+- block:
+    - name: Create a tmpfile for IPpools definitions
+      tempfile:
+        state: directory
+      changed_when: false
+      register: tmpdir
+
+    - name: Write IPpool contents to tmpfile
+      copy:
+        content: "{{ pool }}"
+        dest: "{{ tmpdir.path }}/ippool{{ pool_num }}.yaml"
+        mode: "0644"
+      changed_when: false
+      loop: "{{ kubernetes_network_plugin_calico_ippools }}"
+      loop_control:
+        loop_var: pool
+        index_var: pool_num
+
+    - name: Apply ippools with calicoctl
+      command: "{{ kubernetes_network_plugin_calico_calicoctl_path }} apply -f {{ tmpdir.path }}/ippool{{ pool_num }}.yaml"
+      environment:
+        KUBECONFIG: "{{ kubernetes_kubeconfig }}"
+        DATASTORE_TYPE: kubernetes
+      register: ippools_apply
+      loop: "{{ kubernetes_network_plugin_calico_ippools }}"
+      loop_control:
+        loop_var: pool
+        index_var: pool_num
+      when:
+        - "pool.spec.cidr|string not in ippools_list"
+  always:
+    - name: Cleanup tmpfile
+      file:
+        path: "{{ tmpdir.path }}"
+        state: absent
+      changed_when: false
+  when:
+    - "kubernetes_master"

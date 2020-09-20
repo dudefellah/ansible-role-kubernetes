@@ -1,7 +1,9 @@
 ---
 - name: Converge
-  hosts: all
+  hosts: k8s
   tasks:
-    - name: "Include ansible-role-kubernetes"
-      include_role:
-        name: "ansible-role-kubernetes"
+    - block:
+        - name: "Include ansible-role-kubernetes"
+          include_role:
+            name: "ansible-role-kubernetes"
+      become: true

@@ -44,9 +44,9 @@ kubernetes_control_plane_endpoint: null
 
 # File contenst are shared between Kubernetes hosts when replicating the control
 # plane. Some sensitive files get copied during this process, so `no_log` is set.
-# If you're debugging, you can set this to true, but be warned that you might
+# If you're debugging, you can set this to false, but be warned that you might
 # leak sensitive information in the process.
-kubernetes_no_log: false
+kubernetes_no_log: true
 
 # General Kubernetes networking configuration values.
 # This will be passed to kubeadm during install.
@@ -62,11 +62,14 @@ kubernetes_networking:
 # globally.
 kubernetes_python_virtualenv: /var/cache/k8s_venv
 
-# You can set the pip modules which get installed when this role tries to
-# install the pip dependencies in order to communicate with Kubernetes. You
-# can skip the pip module install by setting this value to `null` or `[]`.
+# THese are the pip modules which get installed on nodes that are used to acecss
+# the Kubernetes API or do certificate generation.
+# You can skip the pip module install by setting this value to `null` or
+# (preferrably) `[]`.
 kubernetes_python_pip_modules:
   - openshift
+  - pyOpenSSL
+  - selinux
 
 # When using a virtualenv, you'll want to instruct Ansible to use an
 # appropriate Python interpreter. You can do this here. Values that are
@@ -75,7 +78,7 @@ kubernetes_python_pip_modules:
 # like.
 #
 # If this remains set to an alternative Python interpreter, it will only be
-# used when using the k8s* modules and not anywhere else.
+# used when using the k8s* and openssl* modules and not anywhere else.
 kubernetes_python_interpreter: "{{ kubernetes_python_virtualenv }}/bin/python"
 
 # In some spots, this role might fail if something seems to be misconfigured.
@@ -101,12 +104,12 @@ kubernetes_kubelet_cgroup_driver: systemd
 
 # The location of the master CA certificate and key on the master node (and
 # eventually control plane replicas).
-kubernetes_ca_certificate_path: /etc/kubernetes/pki/ca.crt
-kubernetes_ca_privatekey_path: /etc/kubernetes/pki/ca.key
+kubernetes_ca_crt: /etc/kubernetes/pki/ca.crt
+kubernetes_ca_key: /etc/kubernetes/pki/ca.key
 
 # Set the CNI plugin to be used in Kubernetes. Currently this role is limited
-# to calico and is also limited to using CNI as the network plugin. This might
-# change in future releases.
+# to calico as the network plugin and is also limited to using Calico as the CNI.
+# Hopefully this will include additional providers in future releases.
 kubernetes_cni_plugin_name: calico
 
 # Supply a list of CNI plugin binaries for download and install here.
@@ -118,16 +121,18 @@ kubernetes_cni_plugin_binaries:
 
 # When installing the CNI plugin, a CNI key and certificate are generated.
 # The next two values specify their locations on the filesystem.
-kubernetes_cni_certificate_path: /etc/kubernetes/pki/cni.crt
-kubernetes_cni_privatekey_path: /etc/kubernetes/pki/cni.key
+kubernetes_cni_crt: /etc/kubernetes/pki/cni.crt
+kubernetes_cni_key: /etc/kubernetes/pki/cni.key
 
 # The CNI certificates need to be signed against the Kubernetes CA, so this
 # specifies the location of the generated CSR during install.
-kubernetes_cni_csr_path: /etc/kubernetes/pki/cni.csr
+kubernetes_cni_csr: /etc/kubernetes/pki/cni.csr
 
 # The CNI etc dir root. Used for determining the location of the installed kubeconfig
 # and config files (see below).
 kubernetes_cni_etc_path: /etc/cni
+
+kubernetes_cni_crd_url: "https://docs.projectcalico.org/manifests/crds.yaml"
 
 # The Kubernetes CNI plugin RBAC configuration
 kubernetes_cni_rbac:
@@ -175,7 +180,7 @@ kubernetes_cni_rbac:
 # the disk as
 # `{{ kubernetes_cni_etc_path }}/net.d/10-{{ kubernetes_cni_plugin_name }}.conflist`
 #
-# The default should work with the default calico CNI network installation.
+# The default should work with the default Calico CNI network installation.
 kubernetes_cni_pod_network:
   name: k8s-pod-network
   cniVersion: "0.3.1"
@@ -194,3 +199,48 @@ kubernetes_cni_pod_network:
       snat: true
       capabilities:
         portMappings: true
+
+# This is the name of the Network Plugin to use in Kubernetes.
+kubernetes_network_plugin_name: calico
+
+# List any additinal binaries that may need to be downloaded for the installed
+# Network Plugin.
+kubernetes_network_plugin_resource_urls:
+  - url: https://github.com/projectcalico/calicoctl/releases/download/v3.14.0/calicoctl
+    dest: /usr/local/bin/calicoctl
+    mode: "0750"
+
+# Below are some network plugin values that are specific to a Calico install:
+#
+# Define your IPPools that will be passed to calicoctl here
+kubernetes_network_plugin_calico_ippools:
+  - apiVersion: projectcalico.org/v3
+    kind: IPPool
+    metadata:
+      name: calico-pod-pool
+    spec:
+      cidr: "{{ kubernetes_networking.podSubnet }}"
+      ipipMode: Never
+      natOutgoing: true
+      disabled: false
+      nodeSelector: all()
+
+kubernetes_network_plugin_calico_calicoctl_path: /usr/local/bin/calicoctl
+
+# Calico requires a number of certificate to be created, so their path names are
+# defined here.
+#
+# Set the Typha Certificate Authority Certificate and Key locations
+kubernetes_network_calico_typha_ca_crt: /etc/kubernetes/pki/typha/typhaca.crt
+kubernetes_network_calico_typha_ca_key: /etc/kubernetes/pki/typha/typhaca.key
+kubernetes_network_calico_typha_ca_csr: /etc/kubernetes/pki/typha/typhaca.csr
+
+# Set the Regular Typha Pod Certificate and Key locations
+kubernetes_network_calico_typha_crt: /etc/kubernetes/pki/typha/typha.crt
+kubernetes_network_calico_typha_key: /etc/kubernetes/pki/typha/typha.key
+kubernetes_network_calico_typha_csr: /etc/kubernetes/pki/typha/typha.csr
+
+# Set the Calico Pod Certificate and Key locations
+kubernetes_network_calico_node_crt: /etc/kubernetes/pki/typha/node.crt
+kubernetes_network_calico_node_key: /etc/kubernetes/pki/typha/node.key
+kubernetes_network_calico_node_csr: /etc/kubernetes/pki/typha/node.csr

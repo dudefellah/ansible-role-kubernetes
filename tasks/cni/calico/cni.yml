@@ -1,34 +1,60 @@
 ---
-- name: Generate a private key for the Kubernetes CNI plugin
-  openssl_privatekey:
-    path: "{{ kubernetes_cni_privatekey_path }}"
-    size: 4096
-  when:
-    - "kubernetes_master"
+- include_tasks: "{{ role_path }}/tasks/generate-k8s-cert.yml"
+  vars:
+    key_path: "{{ kubernetes_cni_key }}"
+    csr_path: "{{ kubernetes_cni_csr }}"
+    cert_path: "{{ kubernetes_cni_crt }}"
+    common_name: "{{ kubernetes_cni_plugin_name }}-cni"
+    kubeconfig: "{{ kubernetes_kubeconfig }}"
 
-- name: Generate a CNI CSR
-  openssl_csr:
-    path: "{{ kubernetes_cni_csr_path }}"
-    privatekey_path: "{{ kubernetes_cni_privatekey_path }}"
-    subject:
-      CN: "{{ kubernetes_cni_plugin_name }}-cni"
+- name: Slurp cni key
+  slurp:
+    src: "{{ kubernetes_cni_key }}"
+  register: cni_key
+  delegate_to: "{{ _kubernetes_master_node }}"
+  when:
+    - "not kubernetes_master"
+
+- name: Slurp cni cert
+  slurp:
+    src: "{{ kubernetes_cni_crt }}"
+  register: cni_crt
+  delegate_to: "{{ _kubernetes_master_node }}"
+  when:
+    - "not kubernetes_master"
+
+- name: Create cert/key destination paths
+  file:
+    path: "{{ key_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ kubernetes_cni_key }}"
+    - "{{ kubernetes_cni_crt }}"
+  loop_control:
+    loop_var: key_path
+
+- name: Write cni key to non-master nodes
+  copy:
+    content: "{{ cni_key.content | b64decode }}"
+    dest: "{{ kubernetes_cni_key }}"
+    owner: root
+    group: root
     mode: "0600"
   when:
-    - "kubernetes_master"
+    - "not kubernetes_master"
 
-- name: Create a certificate for the Kubernetes CNI plugin
-  openssl_certificate:
-    provider: ownca
-    path: "{{ kubernetes_cni_certificate_path }}"
-    csr_path: "{{ kubernetes_cni_csr_path }}"
-    ownca_path: "{{ kubernetes_ca_certificate_path }}"
-    ownca_privatekey_path: "{{ kubernetes_cni_privatekey_path }}"
-    ownca_not_after: "+365d"
+- name: Write cni cert to non-master nodes
+  copy:
+    content: "{{ cni_crt.content | b64decode }}"
+    dest: "{{ kubernetes_cni_crt }}"
     owner: root
     group: root
     mode: "0644"
   when:
-    - "kubernetes_master"
+    - "not kubernetes_master"
 
 - name: Create cni etc dir
   file:
@@ -45,8 +71,6 @@
     owner: root
     group: root
     mode: "0600"
-  when:
-    - "kubernetes_master"
 
 - name: Apply RBAC Config
   k8s:

@@ -1,0 +1,8 @@
+---
+kubernetes_packages_centos7:
+  - kubeadm
+  - kubelet
+  - kubectl
+  - ipset
+  - openssl
+  - python-virtualenv

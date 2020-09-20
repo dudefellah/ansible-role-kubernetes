@@ -1,0 +1,2 @@
+---
+- include_tasks: "{{ kubernetes_network_plugin_name }}/main.yml"

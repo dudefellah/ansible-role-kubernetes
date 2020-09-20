@@ -25,14 +25,13 @@
         kubeconfig: "{{ kubernetes_kubeconfig }}"
         label_selectors: "{{ _kubernetes_join_label_selectors | default([]) }}"
       register: current_nodes
+      delegate_to: "{{ _kubernetes_master_node }}"
       vars:
         ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
-      when:
-        - "ansible_nodename == _kubernetes_api_client"
 
     - name: Parse the list of active Kubernetes nodes
       set_fact:
-        _kubernetes_active_nodes: "{{ hostvars[_kubernetes_api_client]['current_nodes'].resources | map(attribute='metadata.name') | list }}"
+        _kubernetes_active_nodes: "{{ current_nodes.resources | map(attribute='metadata.name') | list }}"
 
     - name: Set a flag to indicate if the existing node is missing from the node list
       set_fact:

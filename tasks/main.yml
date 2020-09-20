@@ -59,18 +59,8 @@
   tags:
     - kubernetes_master
 
-- name: Manage taints on the master node
-  include_tasks: manage-taints.yml
-  vars:
-    kubernetes_manage_taints: "{{ kubernetes_master }}"
-  tags:
-    - master
-    - taint
-  when:
-    - kubernetes_master
-
-- name: Install the Kubernetes CNI plugin
-  include_tasks: prepare-cni.yml
+- name: Install the Kubernetes CNI
+  include_tasks: "{{ role_path }}/tasks/cni/main.yml"
   tags:
     - kubernetes_network
 
@@ -81,13 +71,13 @@
       - "node-role.kubernetes.io/master"
     _kubernetes_join_node: "{{ kubernetes_control_plane_replica }}"
     _kubernetes_sync_files:
-      - src: "{{ kubernetes_ca_certificate_path }}"
-        dest: "{{ kubernetes_ca_certificate_path }}"
+      - src: "{{ kubernetes_ca_crt }}"
+        dest: "{{ kubernetes_ca_crt }}"
         mode: "0644"
         owner: root
         group: root
-      - src: "{{ kubernetes_ca_privatekey_path }}"
-        dest: "{{ kubernetes_ca_privatekey_path }}"
+      - src: "{{ kubernetes_ca_key }}"
+        dest: "{{ kubernetes_ca_key }}"
         mode: "0644"
         owner: root
         group: root
@@ -127,10 +117,13 @@
   tags:
     - kubernetes_control_plane_replica
 
+- name: Install the rest of the Kubernets Network Plugin
+  include_tasks: "{{ role_path }}/tasks/networking/main.yml"
+  tags:
+    - kubernetes_network
+
 - name: Manage taints on the control plane
   include_tasks: manage-taints.yml
-  vars:
-    kubernetes_manage_taints: "{{ kubernetes_control_plane_replica }}"
   tags:
     - master
     - taint
@@ -146,7 +139,7 @@
   tags:
     - kubernetes_node
 
-- name: Manage taints on everybody else (who knows, maybe this is useful?)
+- name: Manage taints on everybody else
   include_tasks: manage-taints.yml
   vars:
     kubernetes_manage_taints: "{{ (not kubernetes_master) and (not kubernetes_control_plane_replica) }}"

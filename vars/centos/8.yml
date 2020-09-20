@@ -1,0 +1,13 @@
+---
+# Since this role only supports Calico at the moment, CentOS 8 is actually
+# not supported due to some kernel modules missing. In the future, as
+# network plugins are added to this module, I'm hoping that having CentOS 8
+# details in the role will become useful. For now, don't let the fact that
+# this file exists fool you. CentOS 8 is not yet supported.
+kubernetes_packages_centos8:
+  - kubeadm
+  - kubelet
+  - kubectl
+  - iproute-tc
+  - openssl
+  - python3-virtualenv

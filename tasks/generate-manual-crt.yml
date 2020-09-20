@@ -1,0 +1,52 @@
+---
+- name: Create certificates path
+  file:
+    path: "{{ crtfile | dirname }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ cert_path }}"
+    - "{{ csr_path }}"
+    - "{{ key_path }}"
+  loop_control:
+    loop_var: crtfile
+  when:
+    - "kubernetes_master"
+
+- name: Look for the key
+  stat:
+    path: "{{ key_path }}"
+  register: key_st
+
+- name: Look for the csr
+  stat:
+    path: "{{ csr_path }}"
+  register: csr_st
+
+- name: Use OpenSSL directly to create the typha key and csr
+  command: >-
+    openssl req -newkey rsa:4096 \
+           -keyout "{{ key_path }}" \
+           -nodes \
+           -out "{{ csr_path }}" \
+           -subj "{{ csr_subj }}"
+  when:
+    - "kubernetes_master"
+    - "not key_st.stat.exists"
+    - "not csr_st.stat.exists"
+
+- name: Look for the cert
+  stat:
+    path: "{{ cert_path }}"
+  register: cert_st
+
+- name: Use OpenSSL directly to create the crt
+  command: openssl x509 -req -in "{{ csr_path }}" \
+    -CA "{{ ca_cert_path }}" \
+    -CAkey "{{ ca_key_path }}" \
+    -CAcreateserial \
+    -out "{{ cert_path }}" \
+    -days 365
+  when:
+    - "kubernetes_master"
+    - "not cert_st.stat.exists"
