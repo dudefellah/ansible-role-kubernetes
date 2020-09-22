@@ -11,6 +11,7 @@
   slurp:
     src: "{{ kubernetes_cni_key }}"
   register: cni_key
+  no_log: "{{ kubernetes_no_log }}"
   delegate_to: "{{ _kubernetes_master_node }}"
   when:
     - "not kubernetes_master"
@@ -43,6 +44,7 @@
     owner: root
     group: root
     mode: "0600"
+  no_log: "{{ kubernetes_no_log }}"
   when:
     - "not kubernetes_master"
 
@@ -71,6 +73,7 @@
     owner: root
     group: root
     mode: "0600"
+  no_log: "{{ kubernetes_no_log }}"
 
 - name: Apply RBAC Config
   k8s:

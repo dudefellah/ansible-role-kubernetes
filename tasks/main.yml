@@ -122,12 +122,13 @@
   tags:
     - kubernetes_network
 
-- name: Manage taints on the control plane
+- name: Manage taints on the control plane and master
   include_tasks: manage-taints.yml
   tags:
     - master
     - taint
   when:
+    - "kubernetes_master"
     - "kubernetes_control_plane_replica"
 
 - name: Do regular node join process

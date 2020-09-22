@@ -75,6 +75,7 @@
 - name: Slurp up the typha key
   slurp:
     src: "{{ kubernetes_network_calico_typha_key }}"
+  no_log: "{{ kubernetes_no_log }}"
   register: typha_key
   when:
     - "kubernetes_master"

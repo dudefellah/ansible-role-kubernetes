@@ -12,6 +12,7 @@
 - name: Slurp up the node key
   slurp:
     src: "{{ kubernetes_network_calico_node_key }}"
+  no_log: "{{ kubernetes_no_log }}"
   register: node_key
   when:
     - "kubernetes_master"
