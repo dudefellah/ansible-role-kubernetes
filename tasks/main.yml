@@ -52,6 +52,8 @@
       "kubernetes_force" option if you really want continue anyway.
   when:
     - "not kubernetes_force"
+    - "_kubernetes_control_plane_replicas is defined"
+    - "_kubernetes_control_plane_replicas is not none"
     - "(_kubernetes_control_plane_replicas|length) % 2 != 0"
 
 - name: Do master node install process
@@ -121,6 +123,12 @@
   include_tasks: "{{ role_path }}/tasks/networking/main.yml"
   tags:
     - kubernetes_network
+
+- name: Configure the Kubernetes API server
+  include_tasks: configure-apiserver.yml
+  tags:
+    - kubernetes_master
+    - kubernetes_apiserver
 
 - name: Manage taints on the control plane and master
   include_tasks: manage-taints.yml
