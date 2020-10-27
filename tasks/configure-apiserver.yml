@@ -1,0 +1,11 @@
+---
+- name: Add custom args to the end of the kube-apiserver args
+  blockinfile:
+    path: "{{ kubernetes_apiserver_config }}"
+    block: "{{ kubernetes_apiserver_extra_args | to_nice_yaml | trim | indent(4, first=True) }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK for dudefellah.kubernetes - kube-apiserver args"
+    insertafter: "    - --"
+  vars:
+    ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
+  when:
+    - "kubernetes_master|bool"
