@@ -22,6 +22,11 @@ kubernetes_control_plane_replica: false
 # the Kubernetes API on the master node.
 kubernetes_kubeconfig: /etc/kubernetes/admin.conf
 
+# The location of Kubernetes' apiserver configuration file. This is used
+# when passing custom `kubernetes_apiserver_extra_args` values to expand
+# your API server's functionality.
+kubernetes_apiserver_config: /etc/kubernetes/manifests/kube-apiserver.yaml
+
 # This value defines the location of the installed kubectl file. If null, the
 # role will assume it is in the system path appropriate to the distribution
 # package. Typically this means it'll be looking in /usr/bin

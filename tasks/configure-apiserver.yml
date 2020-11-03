@@ -9,3 +9,7 @@
     ansible_python_interpreter: "{{ kubernetes_python_interpreter }}"
   when:
     - "kubernetes_master|bool"
+    - "kubernetes_apiserver_config is defined"
+    - "kubernetes_apiserver_config is not none"
+    - "kubernetes_apiserver_extra_args is defined"
+    - "kubernetes_apiserver_extra_args is not none"
