@@ -11,5 +11,3 @@ galaxy_publish:
   extends: .ansible_galaxy_publish
   image: ansible/ansible-runner
   stage: publish
-  only:
-    - branches
