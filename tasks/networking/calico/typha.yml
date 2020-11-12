@@ -61,7 +61,7 @@
   when:
     - "kubernetes_master"
 
-- include_tasks: generate-manual-crt.yml
+- include_tasks: "{{ role_path }}/tasks/generate-manual-crt.yml"
   vars:
     key_path: "{{ kubernetes_network_calico_typha_key }}"
     csr_path: "{{ kubernetes_network_calico_typha_csr }}"
