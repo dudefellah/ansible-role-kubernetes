@@ -3,9 +3,7 @@ stages:
   - publish
 
 include:
-  - project: "https://gitlab.com/dudefellah/ci-templates"
-    ref: "master"
-    file: "ansible/Galaxy.gitlab-ci.yml"
+  - remote: "https://gitlab.com/dudefellah/ci-templates/-/raw/master/ansible/Galaxy.gitlab-ci.yml"
 
 galaxy_publish:
   image: ansible/ansible-runner
