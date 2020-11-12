@@ -24,3 +24,8 @@ repos:
         "--exclude=.travis.yml",
         "."
       ]
+
+- repo: https://gitlab.com/devopshq/gitlab-ci-linter
+  rev: v1.0.1
+  hooks:
+    - id: gitlab-ci-linter
