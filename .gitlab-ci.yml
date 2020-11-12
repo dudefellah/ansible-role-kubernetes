@@ -1,0 +1,11 @@
+---
+stages:
+  - publish
+
+include:
+  - project: "gitlab.com/dudefellah/ci-templates"
+    ref: "master"
+    file: "ansible/Galaxy.gitlab-ci.yml"
+
+galaxy_publish:
+  extends: .ansible_galaxy_publish
