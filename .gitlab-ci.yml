@@ -8,4 +8,5 @@ include:
     file: "ansible/Galaxy.gitlab-ci.yml"
 
 galaxy_publish:
+  image: ansible/ansible-runner
   extends: .ansible_galaxy_publish
