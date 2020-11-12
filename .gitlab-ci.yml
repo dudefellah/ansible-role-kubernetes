@@ -1,0 +1,13 @@
+---
+stages:
+  - publish
+
+include:
+  - remote: "https://gitlab.com/dudefellah/ci-templates/-/raw/master/ansible/Galaxy.gitlab-ci.yml"
+
+galaxy_publish:
+  variables:
+    ANSIBLE_GALAXY_BRANCH: master
+  extends: .ansible_galaxy_publish
+  image: ansible/ansible-runner
+  stage: publish
