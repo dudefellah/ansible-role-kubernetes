@@ -1,6 +1,7 @@
 galaxy_info:
   role_name: kubernetes
-  author: Dan Thomson
+  author: dudefellah
+  namespace: dudefellah
   description: Kubernetes Cluster Installer
 
   issue_tracker_url: https://github.com/dudefellah/ansible-role-kubernetes/issues
